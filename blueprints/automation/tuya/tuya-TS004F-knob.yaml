@@ -1,41 +1,42 @@
 blueprint:
-
-  name: ZHA - Tuya - TS004F Rotating Knob - Custom Actions
-
-  description: >-
-    This automation adds triggers for all actions of the Tuya TS004F rotating knob remote.
-    It can be used in both Command/Dimmer and Event/Scene mode. Both modes have their own actions.
+  name: ZHA - Tuya - TS004F Rotating Knob - Custom Actions (Maiboroda)
+  description: 'This automation adds triggers for all actions of the Tuya TS004F rotating
+    knob remote. It can be used in both Command/Dimmer and Event/Scene mode. Both
+    modes have their own actions.
 
     In Command/Dimmer mode the config is mostly internal except for pressing the button.
-    In Event/Scene mode you can select your own actions.
-    To switch modes you can press the button 3 times fast.
+    In Event/Scene mode you can select your own actions. To switch modes you can press
+    the button 3 times fast.
 
-    Sold on AliExpress by brands like Moes, Girier etc.
-
+    Sold on AliExpress by brands like Moes, Girier etc.'
   domain: automation
-
   input:
     mode:
       name: Automation Mode
-      description: "https://www.home-assistant.io/docs/automation/modes/"
+      description: https://www.home-assistant.io/docs/automation/modes/
       default: restart
       selector:
         select:
           mode: dropdown
           options:
-            - single
-            - restart
-            - queued
-            - parallel
+          - single
+          - restart
+          - queued
+          - parallel
+          sort: false
+          custom_value: false
+          multiple: false
     max:
       name: Automation Max Queue
-      description: The maximum number of runs that can be executing and/or queued up at a time.
+      description: The maximum number of runs that can be executing and/or queued
+        up at a time.
       default: 10
       selector:
         number:
           mode: box
-          min: 1
-          max: 100
+          min: 1.0
+          max: 100.0
+          step: 1.0
     remote:
       name: Tuya - TS004F Rotating Knob
       description: Select the remote control you wish to use.
@@ -43,191 +44,289 @@ blueprint:
         device:
           integration: zha
           model: TS004F
+          multiple: false
     light:
       name: Light (Command/Dimmer mode)
       selector:
         target:
           entity:
-            domain: light
+          - domain:
+            - light
+    brightness_speed:
+      name: Brightness speed
+      description: Stepping speed for brightness
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    temperature_speed:
+      name: Temperature speed
+      description: Stepping speed for temperature color
+      default: 200
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: "%"
+    default_temp_brightness:
+      name: Default temperature brightness
+      description: Default value for temperature light mode
+      default: 200
+      selector:
+        number:
+          min: 1
+          max: 255
+    default_temp_value:
+      name: Default temperature color
+      default: 2300
+      selector:
+        number:
+          min: 2000
+          max: 10000
+          unit_of_measurement: "K"
+    default_rgb_brightness:
+      name: Default RGB brighness
+      default: 255
+      selector:
+        number:
+          min: 1
+          max: 255
+    max_move_hue_iterations:
+      name: Max move hue iterations
+      description: The limit of change hue itarations for prevent an infinity loop
+      default: 100
+      selector:
+        number:
+          mode: box
+          min: 1
+          max: 1000
+          step: 1
     toggle:
       name: Toggle (Command/Dimmer mode)
       selector:
-        action:
+        action: {}
       default: []
     press_short:
       name: Short Press (Event/Scene mode)
       selector:
-        action:
+        action: {}
       default: []
     press_double:
       name: Double Press (Event/Scene mode)
       selector:
-        action:
+        action: {}
       default: []
     press_long:
       name: Long Press (Event/Scene mode)
       selector:
-        action:
+        action: {}
       default: []
     rotate_left:
       name: Rotate Left (Event/Scene mode)
       selector:
-        action:
+        action: {}
       default: []
     rotate_right:
       name: Rotate Right (Event/Scene mode)
       selector:
-        action:
+        action: {}
       default: []
-
+  source_url: https://github.com/YuriiMaiboroda/HomeAssistantConfig/tree/master
 mode: !input mode
 max: !input max
 max_exceeded: silent
-
 trigger:
-  - platform: event
-    event_type: zha_event
-    event_data:
-      device_id: !input remote
-
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input remote
 action:
-  - variables:
-      light: !input light
-      command: "{{ trigger.event.data.command }}"
-      cluster_id: "{{ trigger.event.data.cluster_id }}"
-      endpoint_id: "{{ trigger.event.data.endpoint_id }}"
-      args: "{{ trigger.event.data.args }}"
-      direction: "{% if trigger.event.data.args[0] == 0 %} 0 {% elif trigger.event.data.args[0] == 1 %} 1 {% elif trigger.event.data.args[0] == 3 %} 3 {% endif %}"
-      value: "{% if trigger.event.data.args[1] %} {{ trigger.event.data.args[1] / 2 }} {% endif %}"
-      speed: "{% if trigger.event.data.args[2] == 1 %} 0.5 {% else %} 0 {% endif %}"
+- variables:
+    command: '{{ trigger.event.data.command }}'
+    light: !input light
+    brightness_speed: !input 'brightness_speed'
+    temperature_speed: !input 'temperature_speed'
+    default_temp_brightness: !input 'default_temp_brightness'
+    default_temp_value: !input 'default_temp_value'
+    default_rgb_brightness: !input 'default_rgb_brightness'
+    max_move_hue_iterations: !input 'max_move_hue_iterations'
+    speed: >
+        {% if command == 'step' %}
+          {{ brightness_speed }}
+        {% elif command == 'step_color_temp' %}
+          {{ temperature_speed }}
+        {% else %}
+          100
+        {% endif %}
+    dir: >
+        {% set command = trigger.event.data.command %}
+        {% set mode = trigger.event.data.params.get('step_mode', None) %}
+        {% if command == 'step' %}
+            {% if mode == 0 %} 1 {% elif mode == 1 %} -1 {% endif %}
+        {% elif command == 'step_color_temp' %}
+            {% if mode == 1 %} 1 {% elif mode == 3 %} -1 {% endif %}
+        {% endif %}
+    step: >
+        {% if command == 'move_hue' %}
+          {{ trigger.event.data.params.get('rate', 0) * speed / 100 }}
+        {% else %}
+          {{ trigger.event.data.params.get('step_size', 0) * speed / 100 }}
+        {% endif %}
+    transition: >
+        {{ trigger.event.data.params.get('transition_time', 0) }}
+    cluster_id: '{{ trigger.event.data.cluster_id }}'
+    endpoint_id: '{{ trigger.event.data.endpoint_id }}'
 
-  - choose:
+- choose:
+  - conditions:
+    - '{{ command == ''toggle'' }}'
+    - '{{ cluster_id == 6 }}'
+    - '{{ endpoint_id == 1 }}'
+    sequence: !input toggle
+  - conditions:
+    - '{{ command == ''step'' }}'
+    - '{{ cluster_id == 8 }}'
+    - '{{ endpoint_id == 1 }}'
+    sequence:
+    - repeat:
+        while:
+        - condition: template
+          value_template: '{{ repeat.index < 2 }}'
+        sequence:
+        - service_template: light.turn_on
+          target: !input light
+          data_template:
+            brightness_step_pct: '{{ dir * step }}'
+            # transition: '{{ transition }}'
+  - conditions:
+    - '{{ command == ''step_color_temp'' }}'
+    - '{{ cluster_id == 768 }}'
+    - '{{ endpoint_id == 1 }}'
+    sequence:
+    - repeat:
+        while:
+        - condition: template
+          value_template: '{{ repeat.index < 2 }}'
+        sequence:
+#        - service_template: system_log.write
+#          data:
+#            level: warning
+#            logger: Maiboroda TS004F Rotating Knob Custom Actions
+#            message: >
+#              {% set old_value = state_attr(light.entity_id, 'color_temp_kelvin' ) %}
+#              {% set new_value = old_value - dir * step %}
+#              {% set max_value = state_attr(light.entity_id, 'max_color_temp_kelvin' ) %}
+#              {% set min_value = state_attr(light.entity_id, 'min_color_temp_kelvin' ) %}
+#              {% if new_value > max_value %}
+#              {% set new_value = max_value %}
+#              {% elif new_value < min_value %}
+#              {% set new_value = min_value %}
+#              {% endif %}
+#              update kelvins:
+#              old value: {{ old_value }};
+#              direction: {{ -dir }};
+#              step: {{ step }};
+#              new value: {{ new_value }}'
+#              speed: {{ speed }};
+#              brightness_speed: {{ brightness_speed }};
+#              temperature_speed: {{ temperature_speed }};
+#              transition: {{ transition }};
+#              original_step: {{ trigger.event.data.params.get('step_size', 0) }}
+#              original_transition: {{ trigger.event.data.params.get('transition_time', 0) }}
+        - service_template: light.turn_on
+          target: !input light
+          data_template:
+            kelvin: >
+              {% if state_attr(light.entity_id, "color_mode") == "color_temp" %}
+              {% set old_value = state_attr(light.entity_id, 'color_temp_kelvin') or default_temp_value %}
+              {% set new_value = old_value - dir * step %}
+              {% else %}
+              {% set new_value = default_temp_value %}
+              {% endif %}
 
-    # Command Mode
-    - conditions:
-        - "{{ command == 'toggle' }}"
-        - "{{ cluster_id == 6 }}"
-        - "{{ endpoint_id == 1 }}"
-      sequence: !input toggle
+              {% set max_value = state_attr(light.entity_id, 'max_color_temp_kelvin' ) %}
+              {% set min_value = state_attr(light.entity_id, 'min_color_temp_kelvin' ) %}
+              {% if new_value > max_value %}
+              {% set new_value = max_value %}
+              {% elif new_value < min_value %}
+              {% set new_value = min_value %}
+              {% endif %}
 
-    # Command Mode: Dimming
-    - conditions:
-        - "{{ command == 'step' }}"
-        - "{{ cluster_id == 8 }}"
-        - "{{ endpoint_id == 1 }}"
-        - "{{ direction == 0 }}"
-      sequence:
-        - repeat:
-            while:
-              - condition: template
-                value_template: "{{ repeat.index < 2 }}"
-            sequence:
-              - service_template: light.turn_on
-                target: !input light
-                data_template:
-                  brightness_step_pct: "{{ value }}"
-                  transition: "{{ speed }}"
-    - conditions:
-        - "{{ command == 'step' }}"
-        - "{{ cluster_id == 8 }}"
-        - "{{ endpoint_id == 1 }}"
-        - "{{ direction == 1 }}"
-      sequence:
-        - repeat:
-            while:
-              - condition: template
-                value_template: "{{ repeat.index < 2 }}"
-            sequence:
-              - service_template: light.turn_on
-                target: !input light
-                data_template:
-                  brightness_step_pct: "{{ - value }}"
-                  transition: "{{ speed }}"
-
-    # Command Mode: Color Temperature
-    - conditions:
-        - "{{ command == 'step_color_temp' }}"
-        - "{{ cluster_id == 768 }}"
-        - "{{ endpoint_id == 1 }}"
-        - "{{ direction == 1 }}"
-      sequence:
-        - repeat:
-            while:
-              - condition: template
-                value_template: "{{ repeat.index < 2 }}"
-            sequence:
-              - service_template: light.turn_on
-                target: !input light
-                data_template:
-                  color_temp: "{{ ( state_attr( light.entity_id, 'color_temp' ) or 300 ) + value }}"
-                  transition: "{{ speed }}"
-    - conditions:
-        - "{{ command == 'step_color_temp' }}"
-        - "{{ cluster_id == 768 }}"
-        - "{{ endpoint_id == 1 }}"
-        - "{{ direction == 3 }}"
-      sequence:
-        - repeat:
-            while:
-              - condition: template
-                value_template: "{{ repeat.index < 2 }}"
-            sequence:
-              - service_template: light.turn_on
-                target: !input light
-                data_template:
-                  color_temp: "{{ ( state_attr( light.entity_id, 'color_temp' ) or 300 ) - value }}"
-                  transition: "{{ speed }}"
-
-    # Command Mode: Color Hue
-    - conditions:
-        - "{{ command == 'move_hue' }}"
-        - "{{ cluster_id == 768 }}"
-        - "{{ endpoint_id == 1 }}"
-      sequence:
-        - repeat:
-            while:
-              - condition: template
-                value_template: "{{ repeat.index < 24 }}"
-            sequence:
-              - service_template: light.turn_on
-                target: !input light
-                data_template:
-                  hs_color:
-                    - "{{ ( value + (state_attr( light.entity_id , 'hs_color' )[0] or 0)) % 360 }}"
-                    - 100
-                  transition: 0.5
-              - delay:
-                  hours: 0
-                  minutes: 0
-                  seconds: 1
-                  milliseconds: 0
-    - conditions:
-        - "{{ command == 'stop_move_step' }}"
-        - "{{ cluster_id == 768 }}"
-        - "{{ endpoint_id == 1 }}"
-      sequence:
-
-    # Event mode: Short Press
-    - conditions:
-        - "{{ command == 'remote_button_short_press' }}"
-      sequence: !input press_short
-
-    # Event mode: Double Press
-    - conditions:
-        - "{{ command == 'remote_button_double_press' }}"
-      sequence: !input press_double
-
-    # Event mode: Long Press
-    - conditions:
-        - "{{ command == 'remote_button_long_press' }}"
-      sequence: !input press_long
-
-    # Event mode: Rotate Left
-    - conditions:
-        - "{{ command == 'left' }}"
-      sequence: !input rotate_left
-
-    # Event mode: Rotate Right
-    - conditions:
-        - "{{ command == 'right' }}"
-      sequence: !input rotate_right
+              {{ new_value }}
+            brightness: >
+              {% if state_attr(light.entity_id, "color_mode") == "color_temp" %}
+              {{ state_attr(light.entity_id, 'brightness') or default_temp_brightness }}
+              {% else %}
+              {{ default_temp_brightness }}
+              {% endif %}
+            # transition: '{{ transition }}'
+  - conditions:
+    - '{{ command == ''move_hue'' }}'
+    - '{{ cluster_id == 768 }}'
+    - '{{ endpoint_id == 1 }}'
+    sequence:
+    - repeat:
+        while:
+        - condition: template
+          value_template: '{{ (wait is not defined or wait.trigger is none) and repeat.index <= max_move_hue_iterations }}'
+        sequence:
+        # - service_template: system_log.write
+        #   data:
+        #     level: warning
+        #     logger: Maiboroda TS004F Rotating Knob Custom Actions
+        #     # message: "Holding button... Repeat index: {{ repeat.index }}"
+        #     message: >
+        #       {% set old_value = state_attr(light.entity_id, 'hs_color' ) %}
+        #       {% set new_value = ( step + (state_attr(light.entity_id , 'hs_color' )[0] or 0)) % 360 %}
+        #       Move Hue:
+        #       old value: {{ old_value }};
+        #       rate: {{ step }};
+        #       new value: {{ new_value }};
+        - service_template: light.turn_on
+          target: !input light
+          data_template:
+            hs_color:
+            - '{{ ( step + (state_attr(light.entity_id , ''hs_color'' )[0] or 0)) % 360 }}'
+            - 100
+            brightness: >
+              {% if state_attr(light.entity_id, "color_mode") == "rgb" %}
+              {{ state_attr(light.entity_id, 'brightness') or default_rgb_brightness }}
+              {% else %}
+              {{ default_rgb_brightness }}
+              {% endif %}
+            transition: 0.1
+        # - delay:
+        #     hours: 0
+        #     minutes: 0
+        #     seconds: 0
+        #     milliseconds: 500
+        - wait_for_trigger:
+            platform: event
+            event_type: zha_event
+            event_data:
+              device_id: "{{ trigger.event.data.device_id }}"
+              command: "stop_move_step"
+          timeout:
+            milliseconds: 100
+  - conditions:
+    - '{{ command == ''stop_move_step'' }}'
+    - '{{ cluster_id == 768 }}'
+    - '{{ endpoint_id == 1 }}'
+    sequence:
+  - conditions:
+    - '{{ command == ''remote_button_short_press'' }}'
+    sequence: !input press_short
+  - conditions:
+    - '{{ command == ''remote_button_double_press'' }}'
+    sequence: !input press_double
+  - conditions:
+    - '{{ command == ''remote_button_long_press'' }}'
+    sequence: !input press_long
+  - conditions:
+    - '{{ command == ''left'' }}'
+    sequence: !input rotate_left
+  - conditions:
+    - '{{ command == ''right'' }}'
+    sequence: !input rotate_rightt
